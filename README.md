@@ -1,5 +1,5 @@
-# Win32 Service Sample
+# Win32 Service Boilerplate
 
 ## Introduction
 
-This repository contains source code based on the [Win32 skeleton service](https://docs.microsoft.com/en-us/windows/win32/services/the-complete-service-sample) provided on MSDN. I intend to refactor the source code to be more in-line with moderna and idiomatic C++.
+This repository is a boilerplate Win32 service based on the [Win32 skeleton service](https://docs.microsoft.com/en-us/windows/win32/services/the-complete-service-sample) provided on MSDN. I'm in the process of refactoring and modernising it.
