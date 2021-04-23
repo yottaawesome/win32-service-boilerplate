@@ -1,4 +1,4 @@
-# Win32 Service Boilerplate
+# Win32 Boilerplate Service
 
 ## Introduction
 
