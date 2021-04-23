@@ -9,13 +9,13 @@
 TCHAR szCommand[10];
 TCHAR szSvcName[80];
 
-VOID __stdcall DisplayUsage(void);
+void __stdcall DisplayUsage(void);
 
-VOID __stdcall DoQuerySvc(void);
-VOID __stdcall DoUpdateSvcDesc(void);
-VOID __stdcall DoDisableSvc(void);
-VOID __stdcall DoEnableSvc(void);
-VOID __stdcall DoDeleteSvc(void);
+void __stdcall DoQuerySvc(void);
+void __stdcall DoUpdateSvcDesc(void);
+void __stdcall DoDisableSvc(void);
+void __stdcall DoEnableSvc(void);
+void __stdcall DoDeleteSvc(void);
 
 //
 // Purpose: 
@@ -59,7 +59,7 @@ int __cdecl _tmain(int argc, TCHAR* argv[])
     return 0;
 }
 
-VOID __stdcall DisplayUsage()
+void __stdcall DisplayUsage()
 {
     printf("Description:\n");
     printf("\tCommand-line tool that configures a service.\n\n");
@@ -83,7 +83,8 @@ VOID __stdcall DisplayUsage()
 // Return value:
 //   None
 //
-VOID __stdcall DoQuerySvc()
+// TODO: clean this crap up
+void __stdcall DoQuerySvc()
 {
     SC_HANDLE schSCManager;
     SC_HANDLE schService;
@@ -94,11 +95,11 @@ VOID __stdcall DoQuerySvc()
     // Get a handle to the SCM database. 
 
     schSCManager = OpenSCManager(
-        NULL,                    // local computer
-        NULL,                    // ServicesActive database 
+        nullptr,                    // local computer
+        nullptr,                    // ServicesActive database 
         SC_MANAGER_ALL_ACCESS);  // full access rights 
 
-    if (NULL == schSCManager)
+    if (schSCManager == nullptr)
     {
         printf("OpenSCManager failed (%d)\n", GetLastError());
         return;
@@ -111,7 +112,7 @@ VOID __stdcall DoQuerySvc()
         szSvcName,             // name of service 
         SERVICE_QUERY_CONFIG); // need query config access 
 
-    if (schService == NULL)
+    if (schService == nullptr)
     {
         printf("OpenService failed (%d)\n", GetLastError());
         CloseServiceHandle(schSCManager);
@@ -119,15 +120,16 @@ VOID __stdcall DoQuerySvc()
     }
 
     // Get the configuration information.
-
-    if (!QueryServiceConfig(
+    bool succeeded = QueryServiceConfigW(
         schService,
-        NULL,
+        nullptr,
         0,
-        &dwBytesNeeded))
+        &dwBytesNeeded
+    );
+    if (succeeded == false)
     {
         dwError = GetLastError();
-        if (ERROR_INSUFFICIENT_BUFFER == dwError)
+        if (dwError == ERROR_INSUFFICIENT_BUFFER)
         {
             cbBufSize = dwBytesNeeded;
             lpsc = (LPQUERY_SERVICE_CONFIG)LocalAlloc(LMEM_FIXED, cbBufSize);
@@ -216,7 +218,7 @@ cleanup:
 // Return value:
 //   None
 //
-VOID __stdcall DoDisableSvc()
+void __stdcall DoDisableSvc()
 {
     SC_HANDLE schSCManager;
     SC_HANDLE schService;
@@ -281,7 +283,7 @@ VOID __stdcall DoDisableSvc()
 // Return value:
 //   None
 //
-VOID __stdcall DoEnableSvc()
+void __stdcall DoEnableSvc()
 {
     SC_HANDLE schSCManager;
     SC_HANDLE schService;
@@ -346,7 +348,7 @@ VOID __stdcall DoEnableSvc()
 // Return value:
 //   None
 //
-VOID __stdcall DoUpdateSvcDesc()
+void __stdcall DoUpdateSvcDesc()
 {
     SC_HANDLE schSCManager;
     SC_HANDLE schService;
@@ -407,33 +409,33 @@ VOID __stdcall DoUpdateSvcDesc()
 // Return value:
 //   None
 //
-VOID __stdcall DoDeleteSvc()
+void __stdcall DoDeleteSvc()
 {
     SC_HANDLE schSCManager;
     SC_HANDLE schService;
     SERVICE_STATUS ssStatus;
 
-    // Get a handle to the SCM database. 
+    // Get a handle to the SCM database.
+    schSCManager = OpenSCManagerW(
+        nullptr,                    // local computer
+        nullptr,                    // ServicesActive database 
+        SC_MANAGER_ALL_ACCESS   // full access rights 
+    );  
 
-    schSCManager = OpenSCManager(
-        NULL,                    // local computer
-        NULL,                    // ServicesActive database 
-        SC_MANAGER_ALL_ACCESS);  // full access rights 
-
-    if (NULL == schSCManager)
+    if (schSCManager == nullptr)
     {
         printf("OpenSCManager failed (%d)\n", GetLastError());
         return;
     }
 
     // Get a handle to the service.
-
-    schService = OpenService(
+    schService = OpenServiceW(
         schSCManager,       // SCM database 
         szSvcName,          // name of service 
-        DELETE);            // need delete access 
+        DELETE              // need delete access 
+    );            
 
-    if (schService == NULL)
+    if (schService == nullptr)
     {
         printf("OpenService failed (%d)\n", GetLastError());
         CloseServiceHandle(schSCManager);
@@ -441,12 +443,10 @@ VOID __stdcall DoDeleteSvc()
     }
 
     // Delete the service.
-
-    if (!DeleteService(schService))
-    {
+    if (DeleteService(schService) == false)
         printf("DeleteService failed (%d)\n", GetLastError());
-    }
-    else printf("Service deleted successfully\n");
+    else
+        printf("Service deleted successfully\n");
 
     CloseServiceHandle(schService);
     CloseServiceHandle(schSCManager);

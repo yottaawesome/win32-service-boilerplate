@@ -5,20 +5,20 @@
 
 #pragma comment(lib, "advapi32.lib")
 
-#define SVCNAME TEXT("SvcName")
-#define SVC_ERROR 1
+const wchar_t SVCNAME[] = L"SvcName";
+constexpr int SVC_ERROR = 1;
 
 SERVICE_STATUS          gSvcStatus;
 SERVICE_STATUS_HANDLE   gSvcStatusHandle;
-HANDLE                  ghSvcStopEvent = NULL;
+HANDLE                  ghSvcStopEvent = nullptr;
 
-VOID SvcInstall(void);
-VOID WINAPI SvcCtrlHandler(DWORD);
-VOID WINAPI SvcMain(DWORD, LPTSTR*);
+void SvcInstall(void);
+DWORD WINAPI SvcCtrlHandler(DWORD dwCtrl, DWORD eventType, LPVOID lpEventData, LPVOID lpContext);
+void WINAPI SvcMain(DWORD, LPTSTR*);
 
-VOID ReportSvcStatus(DWORD, DWORD, DWORD);
-VOID SvcInit(DWORD, LPTSTR*);
-VOID SvcReportEvent(const wchar_t* szFunction);
+void ReportSvcStatus(DWORD, DWORD, DWORD);
+void SvcInit(DWORD, LPTSTR*);
+void SvcReportEvent(const wchar_t* szFunction);
 
 
 //
@@ -54,7 +54,7 @@ int __cdecl _tmain(int argc, TCHAR* argv[])
     // This call returns when the service has stopped. 
     // The process should simply terminate when the call returns.
 
-    if (!StartServiceCtrlDispatcher(DispatchTable))
+    if (StartServiceCtrlDispatcherW(DispatchTable) == false)
     {
         SvcReportEvent(L"StartServiceCtrlDispatcher");
     }
@@ -78,7 +78,7 @@ VOID SvcInstall()
     SC_HANDLE schService;
     TCHAR szPath[MAX_PATH];
 
-    if (!GetModuleFileName(nullptr, szPath, MAX_PATH))
+    if (GetModuleFileNameW(nullptr, szPath, MAX_PATH) == false)
     {
         printf("Cannot install service (%d)\n", GetLastError());
         return;
@@ -86,12 +86,13 @@ VOID SvcInstall()
 
     // Get a handle to the SCM database. 
 
-    schSCManager = OpenSCManager(
-        NULL,                    // local computer
-        NULL,                    // ServicesActive database 
-        SC_MANAGER_ALL_ACCESS);  // full access rights 
+    schSCManager = OpenSCManagerW(
+        nullptr,                    // local computer
+        nullptr,                    // ServicesActive database 
+        SC_MANAGER_ALL_ACCESS       // full access rights 
+    );
 
-    if (NULL == schSCManager)
+    if (schSCManager == nullptr)
     {
         printf("OpenSCManager failed (%d)\n", GetLastError());
         return;
@@ -99,7 +100,7 @@ VOID SvcInstall()
 
     // Create the service
 
-    schService = CreateService(
+    schService = CreateServiceW(
         schSCManager,              // SCM database 
         SVCNAME,                   // name of service 
         SVCNAME,                   // service name to display 
@@ -108,19 +109,20 @@ VOID SvcInstall()
         SERVICE_DEMAND_START,      // start type 
         SERVICE_ERROR_NORMAL,      // error control type 
         szPath,                    // path to service's binary 
-        NULL,                      // no load ordering group 
-        NULL,                      // no tag identifier 
-        NULL,                      // no dependencies 
-        NULL,                      // LocalSystem account 
-        NULL);                     // no password 
+        nullptr,                      // no load ordering group 
+        nullptr,                      // no tag identifier 
+        nullptr,                      // no dependencies 
+        nullptr,                      // LocalSystem account 
+        nullptr                        // no password 
+    );                     
 
-    if (schService == NULL)
+    if (schService == nullptr)
     {
         printf("CreateService failed (%d)\n", GetLastError());
         CloseServiceHandle(schSCManager);
         return;
     }
-    else printf("Service installed successfully\n");
+    printf("Service installed successfully\n");
 
     CloseServiceHandle(schService);
     CloseServiceHandle(schSCManager);
@@ -139,22 +141,22 @@ VOID SvcInstall()
 // Return value:
 //   None.
 //
-VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
+void WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 {
     // Register the handler function for the service
-
-    gSvcStatusHandle = RegisterServiceCtrlHandler(
+    gSvcStatusHandle = RegisterServiceCtrlHandlerExW(
         SVCNAME,
-        SvcCtrlHandler);
+        SvcCtrlHandler,
+        nullptr         // can pass a pointer here
+    );
 
-    if (!gSvcStatusHandle)
+    if (gSvcStatusHandle == nullptr)
     {
         SvcReportEvent(TEXT("RegisterServiceCtrlHandler"));
         return;
     }
 
     // These SERVICE_STATUS members remain as set here
-
     gSvcStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
     gSvcStatus.dwServiceSpecificExitCode = 0;
 
@@ -190,13 +192,14 @@ VOID SvcInit(DWORD dwArgc, LPTSTR* lpszArgv)
     // Create an event. The control handler function, SvcCtrlHandler,
     // signals this event when it receives the stop control code.
 
-    ghSvcStopEvent = CreateEvent(
-        NULL,    // default security attributes
-        TRUE,    // manual reset event
-        FALSE,   // not signaled
-        NULL);   // no name
+    ghSvcStopEvent = CreateEventW(
+        nullptr,    // default security attributes
+        true,    // manual reset event
+        false,   // not signaled
+        nullptr // no name
+    );   
 
-    if (ghSvcStopEvent == NULL)
+    if (ghSvcStopEvent == nullptr)
     {
         ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
         return;
@@ -232,9 +235,11 @@ VOID SvcInit(DWORD dwArgc, LPTSTR* lpszArgv)
 // Return value:
 //   None
 //
-VOID ReportSvcStatus(DWORD dwCurrentState,
+void ReportSvcStatus(
+    DWORD dwCurrentState,
     DWORD dwWin32ExitCode,
-    DWORD dwWaitHint)
+    DWORD dwWaitHint
+)
 {
     static DWORD dwCheckPoint = 1;
 
@@ -244,14 +249,25 @@ VOID ReportSvcStatus(DWORD dwCurrentState,
     gSvcStatus.dwWin32ExitCode = dwWin32ExitCode;
     gSvcStatus.dwWaitHint = dwWaitHint;
 
-    if (dwCurrentState == SERVICE_START_PENDING)
-        gSvcStatus.dwControlsAccepted = 0;
-    else gSvcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP;
+    // Add other controls as required https://docs.microsoft.com/en-us/windows/win32/api/winsvc/ns-winsvc-service_status
+    constexpr static DWORD acceptedControlCodes = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+    switch (dwCurrentState)
+    {
+        case SERVICE_START_PENDING:
+            gSvcStatus.dwControlsAccepted = 0;
+            gSvcStatus.dwCheckPoint = dwCheckPoint++;
+            break;
 
-    if ((dwCurrentState == SERVICE_RUNNING) ||
-        (dwCurrentState == SERVICE_STOPPED))
-        gSvcStatus.dwCheckPoint = 0;
-    else gSvcStatus.dwCheckPoint = dwCheckPoint++;
+        case SERVICE_RUNNING:
+        case SERVICE_STOPPED:
+            gSvcStatus.dwControlsAccepted = acceptedControlCodes;
+            gSvcStatus.dwCheckPoint = 0;
+            break;
+
+        default:
+            gSvcStatus.dwControlsAccepted = acceptedControlCodes;
+            gSvcStatus.dwCheckPoint = dwCheckPoint++;
+    }
 
     // Report the status of the service to the SCM.
     SetServiceStatus(gSvcStatusHandle, &gSvcStatus);
@@ -265,32 +281,47 @@ VOID ReportSvcStatus(DWORD dwCurrentState,
 // Parameters:
 //   dwCtrl - control code
 // 
-// Return value:
-//   None
-//
-VOID WINAPI SvcCtrlHandler(DWORD dwCtrl)
+// https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-vista/cc721961(v=ws.10)?redirectedfrom=MSDN#using-service-control-manager-scm-notifications
+// https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nc-winsvc-lphandler_function_ex
+// https://docs.microsoft.com/en-us/windows/win32/api/winsvc/ns-winsvc-service_status?redirectedfrom=MSDN
+// https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-registerservicectrlhandlerexa
+DWORD WINAPI SvcCtrlHandler(DWORD dwCtrl, DWORD eventType, LPVOID lpEventData, LPVOID lpContext)
 {
     // Handle the requested control code. 
-
+    // See return value notes in https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nc-winsvc-lphandler_function_ex
     switch (dwCtrl)
     {
-    case SERVICE_CONTROL_STOP:
-        ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 0);
+        // If your service handles SERVICE_CONTROL_STOP or SERVICE_CONTROL_SHUTDOWN, return NO_ERROR.
+        case SERVICE_CONTROL_STOP:
+            ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 0);
 
-        // Signal the service to stop.
+            // Signal the service to stop.
+            SetEvent(ghSvcStopEvent);
+            ReportSvcStatus(gSvcStatus.dwCurrentState, NO_ERROR, 0);
 
-        SetEvent(ghSvcStopEvent);
-        ReportSvcStatus(gSvcStatus.dwCurrentState, NO_ERROR, 0);
+            return NO_ERROR;
 
-        return;
+        // If your service handles SERVICE_CONTROL_STOP or SERVICE_CONTROL_SHUTDOWN, return NO_ERROR.
+        case SERVICE_CONTROL_SHUTDOWN:
+            return NO_ERROR;
 
-    case SERVICE_CONTROL_INTERROGATE:
-        break;
+        // In general, if your service does not handle the control, return ERROR_CALL_NOT_IMPLEMENTED. 
+        // However, your service should return NO_ERROR for SERVICE_CONTROL_INTERROGATE even if your 
+        // service does not handle it.
+        case SERVICE_CONTROL_INTERROGATE:
+            return NO_ERROR;
 
-    default:
-        break;
+        // In general, if your service does not handle the control, return ERROR_CALL_NOT_IMPLEMENTED. 
+        // However, your service should return NO_ERROR for SERVICE_CONTROL_INTERROGATE even if your 
+        // service does not handle it.
+        default:
+            return ERROR_CALL_NOT_IMPLEMENTED;
+
+        // If your service handles SERVICE_CONTROL_DEVICEEVENT, return NO_ERROR to grant the request and an error code to deny the request.
+        // If your service handles SERVICE_CONTROL_HARDWAREPROFILECHANGE, return NO_ERROR to grant the request and an error code to deny the request.
+        // If your service handles SERVICE_CONTROL_POWEREVENT, return NO_ERROR to grant the request and an error code to deny the request.
+        // For all other control codes your service handles, return NO_ERROR.
     }
-
 }
 
 //
@@ -306,30 +337,30 @@ VOID WINAPI SvcCtrlHandler(DWORD dwCtrl)
 // Remarks:
 //   The service must have an entry in the Application event log.
 //
-VOID SvcReportEvent(const wchar_t* szFunction)
+void SvcReportEvent(const wchar_t* szFunction)
 {
-    HANDLE hEventSource;
-    LPCTSTR lpszStrings[2];
-    TCHAR Buffer[80];
+    HANDLE hEventSource = RegisterEventSourceW(nullptr, SVCNAME);
 
-    hEventSource = RegisterEventSource(NULL, SVCNAME);
-
-    if (NULL != hEventSource)
+    if (hEventSource != nullptr)
     {
+        TCHAR Buffer[80];
         StringCchPrintf(Buffer, 80, TEXT("%s failed with %d"), szFunction, GetLastError());
 
+        LPCTSTR lpszStrings[2];
         lpszStrings[0] = SVCNAME;
         lpszStrings[1] = Buffer;
 
-        ReportEvent(hEventSource,        // event log handle
+        ReportEventW(
+            hEventSource,        // event log handle
             EVENTLOG_ERROR_TYPE, // event type
             0,                   // event category
             SVC_ERROR,           // event identifier
-            NULL,                // no security identifier
+            nullptr,                // no security identifier
             2,                   // size of lpszStrings array
             0,                   // no binary data
             lpszStrings,         // array of strings
-            NULL);               // no binary data
+            nullptr             // no binary data
+        );               
 
         DeregisterEventSource(hEventSource);
     }
